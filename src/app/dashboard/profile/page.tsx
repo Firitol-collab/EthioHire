@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { MOCK_USER_PROFILE } from "@/lib/mock-data";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,35 +11,64 @@ import {
   UserCircle, 
   Mail, 
   Phone, 
-  Linkedin, 
   Plus, 
   X, 
   Briefcase, 
   GraduationCap, 
   Save,
-  Upload
+  Upload,
+  Loader2
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useFirestore, useUser, useDoc, useMemoFirebase } from "@/firebase";
+import { doc } from "firebase/firestore";
+import { updateDocumentNonBlocking, setDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 
 export default function ProfilePage() {
-  const [profile, setProfile] = useState(MOCK_USER_PROFILE);
+  const { user } = useUser();
+  const db = useFirestore();
+  
+  const userDocRef = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return doc(db, 'userProfiles', user.uid);
+  }, [db, user]);
+
+  const { data: profile, isLoading } = useDoc(userDocRef);
+  const [localProfile, setLocalProfile] = useState<any>(null);
   const [newSkill, setNewSkill] = useState("");
+
+  useEffect(() => {
+    if (profile) {
+      setLocalProfile(profile);
+    }
+  }, [profile]);
 
   const handleAddSkill = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newSkill && !profile.skills.includes(newSkill)) {
-      setProfile(prev => ({ ...prev, skills: [...prev.skills, newSkill] }));
+    if (newSkill && !localProfile.skills?.includes(newSkill)) {
+      const updatedSkills = [...(localProfile.skills || []), newSkill];
+      setLocalProfile({ ...localProfile, skills: updatedSkills });
       setNewSkill("");
     }
   };
 
   const removeSkill = (skill: string) => {
-    setProfile(prev => ({ ...prev, skills: prev.skills.filter(s => s !== skill) }));
+    const updatedSkills = localProfile.skills.filter((s: string) => s !== skill);
+    setLocalProfile({ ...localProfile, skills: updatedSkills });
   };
 
   const handleSave = () => {
+    if (!userDocRef || !localProfile) return;
+    
+    setDocumentNonBlocking(userDocRef, {
+      ...localProfile,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+
     toast({ title: "Profile Saved", description: "Your details have been updated successfully." });
   };
+
+  if (isLoading || !localProfile) return <div className="py-20 flex justify-center"><Loader2 className="animate-spin" /></div>;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-20">
@@ -67,15 +95,17 @@ export default function ProfilePage() {
                    <Upload className="h-4 w-4" />
                 </Button>
               </div>
-              <h3 className="font-headline font-bold text-xl">{profile.name}</h3>
-              <p className="text-sm text-muted-foreground mb-4">Software Engineer</p>
+              <h3 className="font-headline font-bold text-xl">{localProfile.firstName} {localProfile.lastName}</h3>
+              <p className="text-sm text-muted-foreground mb-4">{localProfile.currentJobTitle || 'Software Professional'}</p>
               <div className="w-full space-y-2 pt-4 border-t">
                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                   <Mail className="w-4 h-4" /> {profile.email}
+                   <Mail className="w-4 h-4" /> {localProfile.email}
                  </div>
-                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                   <Phone className="w-4 h-4" /> {profile.phone}
-                 </div>
+                 {localProfile.phoneNumber && (
+                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                     <Phone className="w-4 h-4" /> {localProfile.phoneNumber}
+                   </div>
+                 )}
               </div>
             </CardContent>
           </Card>
@@ -86,7 +116,7 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
-                {profile.skills.map((skill) => (
+                {localProfile.skills?.map((skill: string) => (
                   <Badge key={skill} variant="secondary" className="gap-1 px-3 py-1">
                     {skill}
                     <button onClick={() => removeSkill(skill)} className="hover:text-destructive">
@@ -116,8 +146,8 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent>
               <Textarea 
-                value={profile.summary} 
-                onChange={(e) => setProfile(prev => ({ ...prev, summary: e.target.value }))}
+                value={localProfile.bio || ""} 
+                onChange={(e) => setLocalProfile({ ...localProfile, bio: e.target.value })}
                 className="min-h-[120px]"
                 placeholder="Write a brief professional summary..."
               />
@@ -127,54 +157,21 @@ export default function ProfilePage() {
           <Card className="border-border/40 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="font-headline">Work Experience</CardTitle>
-                <CardDescription>Your career history.</CardDescription>
+                <CardTitle className="font-headline">Experience & Education</CardTitle>
+                <CardDescription>Your career and academic history.</CardDescription>
               </div>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Plus className="w-4 h-4" /> Add Experience
-              </Button>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {profile.experience.map((exp) => (
-                <div key={exp.id} className="relative pl-6 border-l-2 border-muted pb-6 last:pb-0">
-                  <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                    <Briefcase className="w-2 h-2 text-white" />
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-lg">{exp.title}</h4>
-                    <p className="text-primary font-medium">{exp.company}</p>
-                    <p className="text-xs text-muted-foreground">{exp.startDate} - {exp.endDate}</p>
-                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{exp.description}</p>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card className="border-border/40 shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="font-headline">Education</CardTitle>
-                <CardDescription>Academic background.</CardDescription>
-              </div>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Plus className="w-4 h-4" /> Add Education
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {profile.education.map((edu) => (
-                <div key={edu.id} className="relative pl-6 border-l-2 border-muted pb-6 last:pb-0">
-                  <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-accent flex items-center justify-center">
-                    <GraduationCap className="w-2 h-2 text-white" />
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-lg">{edu.degree}</h4>
-                    <p className="text-accent font-medium">{edu.institution}</p>
-                    <p className="text-xs text-muted-foreground">{edu.startDate} - {edu.endDate}</p>
-                    {edu.description && <p className="text-sm text-muted-foreground mt-2 leading-relaxed">{edu.description}</p>}
-                  </div>
-                </div>
-              ))}
+            <CardContent className="space-y-4">
+              <Label>Current Company</Label>
+              <Input 
+                value={localProfile.currentCompany || ""} 
+                onChange={(e) => setLocalProfile({ ...localProfile, currentCompany: e.target.value })}
+              />
+              <Label>Current Title</Label>
+              <Input 
+                value={localProfile.currentJobTitle || ""} 
+                onChange={(e) => setLocalProfile({ ...localProfile, currentJobTitle: e.target.value })}
+              />
             </CardContent>
           </Card>
         </div>

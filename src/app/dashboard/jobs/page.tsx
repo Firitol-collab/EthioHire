@@ -1,19 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { MOCK_JOBS } from "@/lib/mock-data";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
   Search, 
-  Filter, 
   Plus, 
   MapPin, 
   Building2, 
   ChevronRight,
-  MoreVertical
+  MoreVertical,
+  Briefcase,
+  Loader2
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -22,17 +22,31 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebase";
+import { collection, query, orderBy } from "firebase/firestore";
 
 export default function JobsPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+  const { user } = useUser();
+  const db = useFirestore();
 
-  const filteredJobs = MOCK_JOBS.filter(job => {
-    const matchesSearch = job.title.toLowerCase().includes(search.toLowerCase()) || 
-                         job.company.toLowerCase().includes(search.toLowerCase());
-    const matchesFilter = filter === "all" || job.status === filter;
-    return matchesSearch && matchesFilter;
-  });
+  const jobsQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
+    return query(
+      collection(db, 'userProfiles', user.uid, 'applications'),
+      orderBy('updatedAt', 'desc')
+    );
+  }, [db, user]);
+
+  const { data: applications, isLoading } = useCollection(jobsQuery);
+
+  const filteredJobs = applications?.filter(app => {
+    // Note: In a real app, we'd join with the global jobPostings collection or denormalize title/company
+    // For now, we assume the application object contains basic job info or we fetch it
+    const matchesFilter = filter === "all" || app.status === filter;
+    return matchesFilter;
+  }) || [];
 
   return (
     <div className="space-y-8">
@@ -52,7 +66,7 @@ export default function JobsPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input 
-            placeholder="Search by title or company..." 
+            placeholder="Search by title..." 
             className="pl-9 h-10 rounded-xl"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -74,7 +88,9 @@ export default function JobsPage() {
       </div>
 
       <div className="grid gap-4">
-        {filteredJobs.length > 0 ? (
+        {isLoading ? (
+          <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-primary" /></div>
+        ) : filteredJobs.length > 0 ? (
           filteredJobs.map((job) => (
             <Card key={job.id} className="border-border/40 shadow-sm hover:shadow-md transition-shadow group">
               <CardContent className="p-0">
@@ -85,24 +101,18 @@ export default function JobsPage() {
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-headline font-bold text-lg group-hover:text-primary transition-colors truncate">
-                        {job.title}
+                        {job.jobTitle || "Job Opportunity"}
                       </h3>
                       <Badge variant={job.status === 'interview' ? 'default' : 'secondary'} className="capitalize">
                         {job.status}
                       </Badge>
-                      {job.matchScore && (
-                        <Badge variant="outline" className="text-accent border-accent/20 bg-accent/5">
-                          {job.matchScore}% AI Match
-                        </Badge>
-                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {job.company}</span>
-                      <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {job.location}</span>
+                      <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {job.companyName || "Unknown Company"}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Link href={`/dashboard/jobs/${job.id}`}>
+                    <Link href={`/dashboard/jobs/${job.jobPostingId}`}>
                       <Button variant="ghost" className="rounded-xl group-hover:bg-primary group-hover:text-white transition-all">
                         View Details <ChevronRight className="ml-1 h-4 w-4" />
                       </Button>

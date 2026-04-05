@@ -8,11 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Sparkles, Link as LinkIcon, Loader2, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { extractJobDetails } from "@/ai/flows/extract-job-details";
+import { useFirestore, useUser } from "@/firebase";
+import { collection, doc, serverTimestamp } from "firebase/firestore";
+import { addDocumentNonBlocking } from "@/firebase/non-blocking-updates";
 
 export default function NewJobPage() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const db = useFirestore();
+  const { user } = useUser();
 
   const handleScrape = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,17 +31,49 @@ export default function NewJobPage() {
       return;
     }
 
+    if (!user || !db) return;
+
     setLoading(true);
-    // Simulate scraping and AI analysis
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const extracted = await extractJobDetails({ url });
+      
+      const jobRef = collection(db, 'jobPostings');
+      const newJobData = {
+        ...extracted,
+        jobUrl: url,
+        extractedAt: new Date().toISOString(),
+        scrapedByUserId: user.uid,
+        status: 'saved',
+      };
+
+      // Add to global job postings
+      const jobDoc = await addDocumentNonBlocking(jobRef, newJobData);
+      
+      // Also link to user's applications
+      const appRef = collection(db, 'userProfiles', user.uid, 'applications');
+      addDocumentNonBlocking(appRef, {
+        jobPostingId: jobDoc?.id || 'temp-id',
+        status: 'saved',
+        userId: user.uid,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+
       toast({
         title: "Job Extracted!",
-        description: "Successfully analyzed the job posting. Redirecting to AI Assistant...",
+        description: `Analyzed "${extracted.title}" at ${extracted.companyName}.`,
       });
-      // Redirect to a mock job detail page
-      router.push("/dashboard/jobs/job-1");
-    }, 2000);
+      
+      router.push("/dashboard/jobs");
+    } catch (e) {
+      toast({
+        title: "Extraction Failed",
+        description: "Could not parse the job posting. Please try another URL.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -52,7 +90,7 @@ export default function NewJobPage() {
           </div>
           <CardTitle className="font-headline">Import from LinkedIn</CardTitle>
           <CardDescription>
-            We'll automatically extract the job title, company, and description.
+            We'll automatically extract the job title, company, and description using AI.
           </CardDescription>
         </CardHeader>
         <CardContent>

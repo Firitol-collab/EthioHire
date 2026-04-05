@@ -1,0 +1,169 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * ETHIOHIRE SECURITY RULES - PROTOTYPING MODE
+     * 
+     * CORE PHILOSOPHY:
+     * This ruleset enforces a strict user-ownership model combined with Database-Backed Access Control (DBAC) 
+     * for administrative privileges. The primary goal is to ensure that users can only access their own 
+     * career-related data while allowing the platform to share public job information globally.
+     * 
+     * DATA STRUCTURE:
+     * - /userProfiles/{userId}: The root of all private user data.
+     * - /userProfiles/{userId}/[subcollections]: Applications, CVs, Subscriptions, and AI logs are nested 
+     *   under the user profile to ensure path-based authorization.
+     * - /jobPostings: A top-level public collection of job listings.
+     * - /plans: A top-level public collection for subscription tier information.
+     * - /appRoles/admin/{adminId}: A secure collection where the presence of a UID grants global admin rights.
+     * 
+     * KEY SECURITY DECISIONS:
+     * - Path-Based Ownership: We use the userId in the path to immediately authorize requests against 
+     *   request.auth.uid, minimizing the need for expensive get() calls.
+     * - DBAC for Admins: Administrative status is checked via the /appRoles/admin collection.
+     * - Public Reads: Job postings and subscription plans are globally readable to facilitate discovery 
+     *   and conversion, but writes are strictly controlled.
+     * - Relational Integrity: Critical ID fields are validated on creation to ensure the document ID 
+     *   matches the internal data and the user's identity.
+     */
+
+    // --- Helper Functions ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/appRoles/admin/$(request.auth.uid));
+    }
+
+    function isExistingOwner(userId) {
+      return resource != null && (isOwner(userId) || isAdmin());
+    }
+
+    function isExistingJobOwner() {
+      return resource != null && (resource.data.scrapedByUserId == request.auth.uid || isAdmin());
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Rules for user profile documents. Access restricted to the owner or admins.
+     * @path /userProfiles/{userId}
+     * @allow (get) If the requester is the owner or an admin.
+     * @deny (update) If the requester tries to change the document ID.
+     * @principle Validates relational integrity between path and internal ID.
+     */
+    match /userProfiles/{userId} {
+      allow get, list: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isAdmin();
+
+      /**
+       * @description Private subcollection for tracking job applications.
+       * @path /userProfiles/{userId}/applications/{applicationId}
+       * @allow (create) If the user owns the parent profile.
+       * @deny (list) If a user tries to list another user's applications.
+       * @principle Uses path-based authorization for independent subcollection security.
+       */
+      match /applications/{applicationId} {
+        allow get, list: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && request.resource.data.userId == userId;
+        allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+        allow delete: if isExistingOwner(userId);
+      }
+
+      /**
+       * @description Private subcollection for user CV files.
+       * @path /userProfiles/{userId}/cvDocuments/{cvDocumentId}
+       * @allow (get) Owner or Admin access.
+       * @deny (create) If the userId in the data does not match the path.
+       */
+      match /cvDocuments/{cvDocumentId} {
+        allow get, list: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && request.resource.data.userId == userId;
+        allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+        allow delete: if isExistingOwner(userId);
+      }
+
+      /**
+       * @description Private subcollection for AI-generated documents.
+       * @path /userProfiles/{userId}/generatedDocuments/{generatedDocumentId}
+       * @allow (list) Owner or Admin.
+       * @principle Restricts access to a user's own data tree.
+       */
+      match /generatedDocuments/{generatedDocumentId} {
+        allow get, list: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && request.resource.data.userId == userId;
+        allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+        allow delete: if isExistingOwner(userId);
+      }
+
+      /**
+       * @description Tracks a user's active/past subscriptions and limits.
+       * @path /userProfiles/{userId}/subscriptions/{subscriptionId}
+       * @allow (get) Owner or Admin.
+       * @deny (update) If the user is not an admin (subscriptions usually managed by server/stripe).
+       */
+      match /subscriptions/{subscriptionId} {
+        allow get, list: if isOwner(userId) || isAdmin();
+        allow create: if isAdmin() || (isOwner(userId) && request.resource.data.userId == userId);
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
+
+      /**
+       * @description Logs AI generation events to track usage limits.
+       * @path /userProfiles/{userId}/aiGenerationLogs/{logId}
+       * @allow (create) User logging their own action.
+       */
+      match /aiGenerationLogs/{logId} {
+        allow get, list: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) && request.resource.data.userId == userId;
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    /**
+     * @description Global job postings. Publicly readable, writeable by authors or admins.
+     * @path /jobPostings/{jobPostingId}
+     * @allow (list) Open to all users for job discovery.
+     * @deny (update) If the user is not the original scraper or an admin.
+     * @principle Public read with owner-only writes.
+     */
+    match /jobPostings/{jobPostingId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && request.resource.data.scrapedByUserId == request.auth.uid;
+      allow update: if isExistingJobOwner();
+      allow delete: if isExistingJobOwner();
+    }
+
+    /**
+     * @description Definitions of subscription tiers (Free, Pro).
+     * @path /plans/{planId}
+     * @allow (get) Open to all users to view pricing/features.
+     * @deny (write) Restricted to system administrators.
+     */
+    match /plans/{planId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    /**
+     * @description DBAC collection for identifying administrators.
+     * @path /appRoles/admin/{adminId}
+     * @allow (get) Only existing admins can inspect the admin list.
+     * @deny (write) Only admins can manage other admins.
+     */
+    match /appRoles/admin/{adminId} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

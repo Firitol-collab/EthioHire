@@ -1,3 +1,16 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "hero-image",
+      "description": "Professional Ethiopian job seeker using a laptop",
+      "imageUrl": "https://picsum.photos/seed/ethiohire-hero/1200/800",
+      "imageHint": "professional laptop"
+    },
+    {
+      "id": "dashboard-preview",
+      "description": "EthioHire dashboard UI preview",
+      "imageUrl": "https://picsum.photos/seed/ethiohire-dashboard/800/600",
+      "imageHint": "dashboard software"
+    }
+  ]
 }

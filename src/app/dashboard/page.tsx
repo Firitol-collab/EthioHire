@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Briefcase, FileText, CheckCircle, Clock, ArrowUpRight } from "lucide-react";
+import { Briefcase, FileText, CheckCircle, Clock, ArrowUpRight, Sparkles } from "lucide-react";
 import { MOCK_JOBS } from "@/lib/mock-data";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
@@ -15,9 +15,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-headline font-bold text-primary">Welcome back, Abebe</h1>
-        <p className="text-muted-foreground mt-1">Here's what's happening with your job search.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-headline font-bold text-primary">Welcome back, Abebe</h1>
+          <p className="text-muted-foreground mt-1">Here's what's happening with your job search.</p>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 bg-secondary rounded-xl border border-border/50">
+          <Sparkles className="w-4 h-4 text-accent" />
+          <span className="text-sm font-medium">Daily AI Limit: 3/3 left</span>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

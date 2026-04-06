@@ -1,6 +1,6 @@
 /**
- * Firebase configuration object.
- * When deploying to Vercel, ensure these environment variables are set in the Vercel dashboard.
+ * Firebase configuration object using Next.js public environment variables.
+ * Prefixing with NEXT_PUBLIC_ ensures these are accessible on the client side.
  */
 export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,

@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { 
@@ -8,7 +8,6 @@ import {
   ExternalLink, 
   Clock, 
   CheckCircle2, 
-  AlertCircle,
   Loader2,
   Briefcase
 } from "lucide-react";
@@ -40,7 +39,9 @@ export default function ApplicationsPage() {
 
       <div className="grid gap-4">
         {isLoading ? (
-          <div className="py-20 flex justify-center"><Loader2 className="animate-spin text-primary" /></div>
+          <div className="py-20 flex justify-center">
+            <Loader2 className="animate-spin text-primary h-8 w-8" />
+          </div>
         ) : applications && applications.length > 0 ? (
           applications.map((app) => (
             <Card key={app.id} className="border-border/40 shadow-sm hover:shadow-md transition-all group">
@@ -52,7 +53,7 @@ export default function ApplicationsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-headline font-bold text-lg truncate">
-                        {app.jobTitle || "Application to " + (app.companyName || "Company")}
+                        {app.jobTitle || "Job Application"}
                       </h3>
                       <Badge variant={getStatusVariant(app.status)} className="capitalize">
                         {app.status}

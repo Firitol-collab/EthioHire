@@ -7,12 +7,21 @@ import { getFirestore } from 'firebase/firestore';
 
 /**
  * Initializes Firebase with the provided configuration.
- * Prevents multiple initializations by checking existing apps.
- * Explicitly provides the config object for compatibility with Vercel and non-Firebase hosting.
+ * Prevents multiple initializations and provides robust handling for environments like Vercel.
  */
 export function initializeFirebase() {
   if (typeof window === 'undefined') {
-    // Return placeholder SDKs for SSR to avoid "no-options" errors during build
+    // Return placeholder SDKs for SSR to avoid errors during build
+    return {
+      firebaseApp: null as any,
+      auth: null as any,
+      firestore: null as any
+    };
+  }
+
+  // Validate configuration to prevent 'no-options' or 'invalid-api-key' errors
+  if (!firebaseConfig.apiKey) {
+    console.error('Firebase Error: Configuration is missing. Please check your .env.local file and NEXT_PUBLIC_ prefixes.');
     return {
       firebaseApp: null as any,
       auth: null as any,
@@ -23,7 +32,7 @@ export function initializeFirebase() {
   let firebaseApp: FirebaseApp;
 
   if (!getApps().length) {
-    // Manual initialization with config object is required for Vercel
+    // Manual initialization with config object is mandatory for non-Firebase hosting (Vercel)
     firebaseApp = initializeApp(firebaseConfig);
   } else {
     firebaseApp = getApp();
@@ -33,6 +42,15 @@ export function initializeFirebase() {
 }
 
 export function getSdks(firebaseApp: FirebaseApp) {
+  // If app failed to initialize, return nulls to be handled by providers
+  if (!firebaseApp) {
+    return {
+      firebaseApp: null as any,
+      auth: null as any,
+      firestore: null as any
+    };
+  }
+
   return {
     firebaseApp,
     auth: getAuth(firebaseApp),

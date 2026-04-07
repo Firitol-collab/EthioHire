@@ -16,7 +16,7 @@ import { useFirestore, useCollection, useMemoFirebase, useUser } from "@/firebas
 import { collection, query, orderBy, where } from "firebase/firestore";
 
 export default function ApplicationsPage() {
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const db = useFirestore();
 
   const applicationsQuery = useMemoFirebase(() => {
@@ -26,9 +26,10 @@ export default function ApplicationsPage() {
       where('status', 'in', ['applied', 'interview', 'offered', 'rejected']),
       orderBy('updatedAt', 'desc')
     );
-  }, [db, user?.uid]); // Use uid for more stable dependency
+  }, [db, user?.uid]);
 
-  const { data: applications, isLoading } = useCollection(applicationsQuery);
+  const { data: applications, isLoading: isQueryLoading } = useCollection(applicationsQuery);
+  const isLoading = isUserLoading || isQueryLoading;
 
   return (
     <div className="space-y-8">
@@ -62,7 +63,7 @@ export default function ApplicationsPage() {
                     <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5" /> 
-                        Updated {new Date(app.updatedAt).toLocaleDateString()}
+                        Updated {app.updatedAt ? new Date(app.updatedAt).toLocaleDateString() : 'Recently'}
                       </span>
                       {app.status === 'interview' && (
                         <span className="flex items-center gap-1 text-accent font-medium">

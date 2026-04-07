@@ -29,15 +29,6 @@ export interface FirebaseContextState {
   userError: Error | null;
 }
 
-export interface FirebaseServicesAndUser {
-  firebaseApp: FirebaseApp;
-  firestore: Firestore;
-  auth: Auth;
-  user: User | null;
-  isUserLoading: boolean;
-  userError: Error | null;
-}
-
 export interface UserHookResult {
   user: User | null;
   isUserLoading: boolean;
@@ -104,10 +95,6 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
   );
 };
 
-/**
- * Main hook to access services.
- * In a production app, useFirestore() etc. are preferred for granular access.
- */
 export const useFirebase = (): FirebaseContextState => {
   const context = useContext(FirebaseContext);
   if (context === undefined) {
@@ -124,11 +111,6 @@ export const useAuth = (): Auth | null => {
 export const useFirestore = (): Firestore | null => {
   const { firestore } = useFirebase();
   return firestore;
-};
-
-export const useFirebaseApp = (): FirebaseApp | null => {
-  const { firebaseApp } = useFirebase();
-  return firebaseApp;
 };
 
 /**

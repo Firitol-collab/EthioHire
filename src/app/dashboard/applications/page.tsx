@@ -26,7 +26,7 @@ export default function ApplicationsPage() {
       where('status', 'in', ['applied', 'interview', 'offered', 'rejected']),
       orderBy('updatedAt', 'desc')
     );
-  }, [db, user]);
+  }, [db, user?.uid]); // Use uid for more stable dependency
 
   const { data: applications, isLoading } = useCollection(applicationsQuery);
 

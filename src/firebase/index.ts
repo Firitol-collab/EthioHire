@@ -7,11 +7,11 @@ import { getFirestore } from 'firebase/firestore';
 
 /**
  * Initializes Firebase with the provided configuration.
- * Prevents multiple initializations and provides robust handling for environments like Vercel.
+ * Prevents initialization during SSR/Prerender and handles missing config gracefully.
  */
 export function initializeFirebase() {
+  // Guard against server-side execution
   if (typeof window === 'undefined') {
-    // Return placeholder SDKs for SSR to avoid errors during build
     return {
       firebaseApp: null as any,
       auth: null as any,
@@ -19,9 +19,9 @@ export function initializeFirebase() {
     };
   }
 
-  // Validate configuration to prevent 'no-options' or 'invalid-api-key' errors
+  // Validate configuration before initialization
   if (!firebaseConfig.apiKey) {
-    console.error('Firebase Error: Configuration is missing. Please check your .env.local file and NEXT_PUBLIC_ prefixes.');
+    console.warn('Firebase Warning: NEXT_PUBLIC_FIREBASE_API_KEY is missing. Check your environment variables.');
     return {
       firebaseApp: null as any,
       auth: null as any,
@@ -31,31 +31,26 @@ export function initializeFirebase() {
 
   let firebaseApp: FirebaseApp;
 
-  if (!getApps().length) {
-    // Manual initialization with config object is mandatory for non-Firebase hosting (Vercel)
-    firebaseApp = initializeApp(firebaseConfig);
-  } else {
-    firebaseApp = getApp();
-  }
-
-  return getSdks(firebaseApp);
-}
-
-export function getSdks(firebaseApp: FirebaseApp) {
-  // If app failed to initialize, return nulls to be handled by providers
-  if (!firebaseApp) {
+  try {
+    if (!getApps().length) {
+      firebaseApp = initializeApp(firebaseConfig);
+    } else {
+      firebaseApp = getApp();
+    }
+    
+    return {
+      firebaseApp,
+      auth: getAuth(firebaseApp),
+      firestore: getFirestore(firebaseApp)
+    };
+  } catch (error) {
+    console.error('Firebase Initialization Error:', error);
     return {
       firebaseApp: null as any,
       auth: null as any,
       firestore: null as any
     };
   }
-
-  return {
-    firebaseApp,
-    auth: getAuth(firebaseApp),
-    firestore: getFirestore(firebaseApp)
-  };
 }
 
 export * from './provider';
